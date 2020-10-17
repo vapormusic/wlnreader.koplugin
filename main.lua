@@ -69,7 +69,7 @@ function WLNReader:addToMainMenu(menu_items)
     }
 end
 
-function WLNReader:_makeRequest(url, method, request_body)
+function WLNReader:_makeJsonRequest(url, method, request_body)
     local sink = {}
     local source = ltn12.source.string(request_body)
     local respbody = {}
@@ -98,12 +98,38 @@ function WLNReader:_makeRequest(url, method, request_body)
     return response
 end
 
+function WLNReader:_makeHtmlRequest(url, method, request_body)
+    local sink = {}
+    local source = ltn12.source.string(request_body)
+    local respbody = {}
+    http.request{
+        url = url,
+        method = method,
+        sink = ltn12.sink.table(sink),
+        source = source,
+        headers = {
+            ["Content-Length"] = #request_body,
+            ["Content-Type"] = "application/json"
+        }
+    }
+
+    if not sink[1] then
+        error("No response from WLN Server")
+    end
+    -- print log from response body
+  -- print(table.concat(sink))
+   
+
+    return table.concat(sink)
+end
+
+
 function WLNReader:printSearchResult(title)
    -- get response from site
    -- local request_body = '{"mode" : "search-advanced","title-search-text" : "' .. title .. '"}'
     local request_body = '{"title": "'.. title ..'", "mode": "search-title"}'
     local url = "https://www.wlnupdates.com/api" 
-    local responses = self:_makeRequest(url, "POST", request_body)	
+    local responses = self:_makeJsonRequest(url, "POST", request_body)	
     print("series id: ".. responses.data.results[1].sid)
     --- print results
    local WLNSearch = Menu:new{
@@ -138,7 +164,7 @@ function WLNReader:searchDetail(sid)
    -- local request_body = '{"mode" : "search-advanced","title-search-text" : "' .. title .. '"}'
     local request_body = '{"id": "'.. sid ..'", "mode": "get-series-id"}'
     local url = "https://www.wlnupdates.com/api" 
-    local responses = self:_makeRequest(url, "POST", request_body)	
+    local responses = self:_makeJsonRequest(url, "POST", request_body)	
     print("series id: ".. responses.data.releases[1].srcurl)
     --- print results
    local WLNSearch2 = Menu:new{
@@ -168,7 +194,30 @@ function WLNReader:searchDetail(sid)
                 
                 if type(responses.data.releases[i].volume) ~= "number" then vol1 = "" else vol1 = 			responses.data.releases[i].volume end
     	if type(responses.data.releases[i].chapter) ~= "number" then chap1 = "" else chap1 = responses.data.releases[i].chapter end
+    	
     		tempname = responses.data.title .." - ".. "Volume ".. vol1 .. ", Chapter " .. chap1
+    		 responsesu = self:_makeHtmlRequest(responses.data.releases[i].srcurl, "GET", "")
+    		 print(#responsesu)
+    		 qstart = string.find(responsesu,"entry-content", 1, true)
+    		 qend = string.find(responsesu,"entry-footer", 1, true)
+    		 if (qstart ~= nil and qend ~= nil) then
+    		 cropped = string.sub(responsesu,qstart,qend)
+    		 	if #cropped < 17000 then 
+	    		 -- sus
+	    		 lenx = '<a href="';
+	    		 qstart = string.find(cropped,'<a href="', 1, true)
+	    		 qend = string.find(cropped,'">', qstart, true)
+	    		 --print(qstart)
+	    		 
+	    		 truelink = string.sub(cropped,qstart + #lenx,qend-1)
+	    		 print(truelink)
+	    		 	if (truelink ~= nil and #truelink > 5) then 
+	    		 	responses.data.releases[i].srcurl = string.sub(cropped,qstart + #lenx,qend-1)
+	    		 	end
+    		 	end
+    		 end
+    		-- print(string.find(responsesu,"entry-content", 1, true))
+    		-- print(string.find(responsesu,"entry-footer", 1, true))
                 WLNReader:downloadEbook(responses.data.releases[i].srcurl,tempname)
                 end
     		print(temp.text)
@@ -181,11 +230,14 @@ function WLNReader:searchDetail(sid)
     print("showed2")
 end
 
+
+
+
 function WLNReader:downloadEbook(url,name)
 local request_body = '{"title": "'.. name ..'", "urls": ["' .. url .. '"]}'
 print(request_body)
 local url2 = "https://epub.press/api/v1/books" 
-local responses = self:_makeRequest(url2, "POST", request_body)
+local responses = self:_makeJsonRequest(url2, "POST", request_body)
 print(responses.id)
 download_id = responses.id
 fulllink ="https://epub.press/api/v1/books/".. download_id .."/download?filetype=epub"
