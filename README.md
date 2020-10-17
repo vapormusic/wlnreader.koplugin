@@ -1,6 +1,6 @@
 # WLN Reader
 
-WLN Reader is a bare-bones Web and Light novels searcher and downloader. 
+WLN Reader is a bare-bones Web and Light novels searcher and downloader for KOReader. 
 
   - Search for releases from wlnupdates.com 
   - Get links and query epubs to epub.press
