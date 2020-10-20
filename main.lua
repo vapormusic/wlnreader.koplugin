@@ -18,6 +18,9 @@ local lfs = require("libs/libkoreader-lfs")
 local turbo = require("turbo")
 local httpclient = require("httpclient")
 local InputDialog = require("ui/widget/inputdialog")
+local Geom = require("ui/geometry")
+local Size = require("ui/size")
+local Button = require("ui/widget/button")
 
 local ffi = require("ffi")
 local C = ffi.C
@@ -33,6 +36,7 @@ local WLNReader = InputContainer:new{
     name = "wlnreader",
     is_doc_only = false,
     results = {},
+    path = {}
 }
 
 
@@ -92,7 +96,7 @@ function WLNReader:_makeJsonRequest(url, method, request_body)
     local response = json.decode(table.concat(sink))
    -- print("series id: ".. response.data.results[1].sid)
     if response.error then
-        error(response.error)
+        --error(response.error)
     end
 
     return response
@@ -130,8 +134,9 @@ function WLNReader:printSearchResult(title)
     local request_body = '{"title": "'.. title ..'", "mode": "search-title"}'
     local url = "https://www.wlnupdates.com/api" 
     local responses = self:_makeJsonRequest(url, "POST", request_body)	
-    print("series id: ".. responses.data.results[1].sid)
+    --print("series id: ".. responses.data.results[1].sid)
     --- print results
+    if (responses.error == false and #responses.data.results > 0)  then
    local WLNSearch = Menu:new{
     title = "Search results:",
     width = Screen:getWidth(),
@@ -145,6 +150,12 @@ function WLNReader:printSearchResult(title)
     		temp.text = responses.data.results[i].match[1][2]
     		temp.name = nil
                 temp.callback = function()
+                	 WLNReader.path = {""}
+                	 print("passe")
+                	 require("table")
+                	 table.insert(WLNReader.path,title)
+                	 print(WLNReader.path[2])
+                	 print("passed")
                         WLNReader:searchDetail(responses.data.results[i].sid)
                         UIManager:close(WLNSearch)	
                 end
@@ -153,9 +164,26 @@ function WLNReader:printSearchResult(title)
     	end
     	local items = #self.results
     WLNSearch:switchItemTable("Results", self.results , items, nil)  
+    WLNSearch.paths = {"1"}
+    function WLNSearch:onReturn()
+    	WLNReader.path = {" "}
+    	UIManager:close(WLNSearch)	
+    	WLNReader: searchInput()   
+    	print("ok return")
+    	return true
+    end
+    
+    
     UIManager:show(WLNSearch)	
     WLNSearch:onFirstPage()
     print("showed")
+    else
+     UIManager:show(InfoMessage:new{
+                     	text = _("No novels found!"),
+                     	timeout = 5,
+            	      })
+    WLNReader: searchInput()
+    end
     return responses.id
 end
 
@@ -167,6 +195,7 @@ function WLNReader:searchDetail(sid)
     local responses = self:_makeJsonRequest(url, "POST", request_body)	
     print("series id: ".. responses.data.releases[1].srcurl)
     --- print results
+    if #responses.data.releases > 0 then
    local WLNSearch2 = Menu:new{
     title = "Chapters:",
     width = Screen:getWidth(),
@@ -179,7 +208,7 @@ function WLNReader:searchDetail(sid)
     --print(type(responses.data.releases[27].chapter)) 
     print(#responses.data.releases)
     
-    if #responses.data.releases > 15 then k =#responses.data.releases  else k = #responses.data.releases end
+    if (#responses.data.releases > 15 ) then k =#responses.data.releases  else k = #responses.data.releases end
     	for i=1, k do
     	temp = {}
 
@@ -200,6 +229,8 @@ function WLNReader:searchDetail(sid)
     		 print(#responsesu)
     		 qstart = string.find(responsesu,"entry-content", 1, true)
     		 qend = string.find(responsesu,"entry-footer", 1, true)
+    		 print(qstart)
+    		 print(qend)
     		 if (qstart ~= nil and qend ~= nil) then
     		 cropped = string.sub(responsesu,qstart,qend)
     		 	if #cropped < 17000 then 
@@ -223,11 +254,30 @@ function WLNReader:searchDetail(sid)
     		print(temp.text)
     		table.insert(self.results, temp)
     	end
+    	
     	local items = #self.results
+    WLNSearch2.paths = {"1"} 	
     WLNSearch2:switchItemTable("Results", self.results , items, nil)
-    UIManager:show(WLNSearch2)	
+    UIManager:show(WLNSearch2)
+    function WLNSearch2:onReturn()
+    print(#WLNReader.path)
+    	local x = WLNReader.path[1]
+    	local y = WLNReader.path[2]
+    	WLNReader.path = {x,y}
+    	UIManager:close(WLNSearch2)	
+    	WLNReader:printSearchResult(WLNReader.path[2])
+    	print("ok return")
+    	return true
+    end	
     WLNSearch2:onFirstPage()
     print("showed2")
+    else 
+     UIManager:show(InfoMessage:new{
+                     	text = _("No chapters"),
+                     	timeout = 5,
+            	      })
+     WLNReader:printSearchResult(WLNReader.path[2])       	      
+    end
 end
 
 
